@@ -12,4 +12,8 @@ defmodule ExIbus.ReaderTest do
   test "pid should be process", %{pid: pid} do
     assert is_pid(pid)
   end
+
+  test "read() return empty list of messages", %{pid: pid} do
+    [] = Reader.read(pid)
+  end
 end
