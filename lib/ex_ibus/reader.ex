@@ -11,23 +11,26 @@ defmodule ExIbus.Reader do
   defmodule State do
 
     @moduledoc false
-    @opaque t :: %__MODULE__{buffer: binary, controlling_process: pid, is_active: boolean}
+    @opaque t :: %__MODULE__{buffer: binary, name: binary, messages: [ExIbus.Message.t], listener: pid, active: boolean}
     @doc false
 
     # buffer: list of bytes to process
     # messages: list of already parsed messages waiting to be sent
-    # controlling_process: pid send messages to
-    # is_active: active or passive mode
+    # listener: pid send messages to
+    # active: active or passive mode
+    # name: reader name
     defstruct buffer: "", 
       messages: [],
-      controlling_process: nil,
-      is_active: true
+      name: "",
+      listener: nil,
+      active: false
 
   end
 
   @type reader_options :: 
           {:active, boolean}
           | {:listener, pid}
+          | {:name, binary}
 
   @spec start_link([term]) :: {:ok, pid} | {:error, term}
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, %State{}, opts)
@@ -42,7 +45,7 @@ defmodule ExIbus.Reader do
   []
   ```
   """
-  @spec read(pid) :: [ExIbus.Message.t] | {:error, term}
+  @spec read(GenServer.server) :: [ExIbus.Message.t] | {:error, term}
   def read(pid), do: GenServer.call(pid, :get_messages)
 
   @doc """
@@ -51,6 +54,39 @@ defmodule ExIbus.Reader do
   @spec write(GenServer.server, binary) :: :ok | {:error, term}
   def write(pid, msg) do
     send(pid, {:message, msg})
+  end
+
+  @doc """
+  Configure reader process.
+
+  The folowing options are available:
+
+   * `:active` - (`true` or `false`) specifies whether data is received as
+   messages or by calling `read/2`. See discussion below.
+
+   * `:listener` - `pid` that will receive messages in active mode.
+
+   * `:name` - Reader name. If you need to start several readers you are able to use different names
+   and you will receive `Reader` name into message later.
+
+  Active mode defaults to true and means that data received on the
+  Ibus Reader is reported in messages. The messages have the following form:
+
+     `{:ex_ibus, reader_name, data}`
+
+  or
+
+     `{:ex_ibus, reader_name, {:error, reason}}`
+
+  When in active mode, flow control can not be used to push back on the
+  sender and messages will accumulated in the mailbox should data arrive
+  fast enough. If this is an issue, set `:active` to false and call
+  `read/1` manually when ready for more data.
+
+  """
+  @spec configure(GenServer.server, reader_options) :: :ok | {:error, term}
+  def configure(pid, opts) do
+    GenServer.call(pid, {:configure, opts})
   end
 
 
@@ -75,12 +111,38 @@ defmodule ExIbus.Reader do
   @spec handle_info({:message, binary}, State.t) :: {:noreply, State.t} | {:error, term}
   def handle_info({:message, msg}, state) do
     new_state = process_new_message(msg, state) 
+                |> send_messages()
     {:noreply, new_state}
   end
 
   @doc false
-  def handle_call(:get_messages, _from, %State{messages: messages} = state) do
-    {:reply, messages, %State{state | messages: []}}
+  def handle_call(:get_messages, _from, %State{messages: messages, active: active} = state) do
+    case active do
+      true -> {:reply, [], state}
+      false -> {:reply, messages, %State{state | messages: []}}
+    end
+  end
+
+  @doc false
+  def handle_call({:configure, opts}, _from, state) do
+    active = Keyword.get(opts, :active, true)
+    listener = Keyword.get(opts, :listener, nil)
+    name = Keyword.get(opts, :name, "")
+
+    case configure_reader(state, [active: active, listener: listener, name: name]) do
+      {:ok, new_state} -> {:reply, :ok, new_state}
+      {:error, msg, new_state} -> {:reply, {:error, msg}, new_state}
+      _ -> {:reply, {:error, "Something went wrong"}, state}
+    end
+  end
+
+
+  # Set new configuration for reader
+  defp configure_reader(state, [active: true, listener: nil, name: name]) do 
+    {:error, "Could not enable active mode without listener", %State{state | name: name}}
+  end
+  defp configure_reader(state, [active: active, listener: listener, name: name]) do
+    {:ok, %State{state | active: active, listener: listener, name: name}}
   end
 
   # Process buffer that was received by module
@@ -142,14 +204,14 @@ defmodule ExIbus.Reader do
   end
   
   # Send list of messages one by one to controlling process
-  defp send_messages(%State{is_active: false} = state), do: {:ok, state}
-  defp send_messages(%State{messages: []} = state), do: {:ok, state}
-  defp send_messages(%State{controlling_process: nil} = state), do: {:ok, state}
-  defp send_messages(%State{messages: messages, controlling_process: pid, is_active: true} = state) do
+  defp send_messages(%State{active: false} = state), do: state
+  defp send_messages(%State{messages: []} = state), do: state
+  defp send_messages(%State{listener: nil} = state), do: state
+  defp send_messages(%State{messages: messages, listener: pid, active: true, name: name} = state) do
     messages
-    |> Enum.each(&(send(pid, {:message, &1})))
+    |> Enum.each(&(send(pid, {:ex_ibus, name, &1})))
 
-    {:ok, %State{state | messages: []}}
+    %State{state | messages: []}
   end
 
 end
