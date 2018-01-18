@@ -1,7 +1,6 @@
 defmodule ExIbus.Message do
-
   use Bitwise
-  
+
   @moduledoc """
   A struct that keeps information about Ibus Message
 
@@ -24,7 +23,7 @@ defmodule ExIbus.Message do
       message
       |> ExIbus.Message.raw()
       |> String.codepoints()
-      |> Enum.map(&("0x#{Base.encode16(&1)}"))
+      |> Enum.map(&"0x#{Base.encode16(&1)}")
       |> Enum.join(" ")
     end
   end
@@ -40,7 +39,7 @@ defmodule ExIbus.Message do
 
   This message should be sent into Ibus can and will be normally received by car
   """
-  @spec raw(ExIbus.Message.t) :: binary
+  @spec raw(ExIbus.Message.t()) :: binary
   def raw(%__MODULE__{src: src, dst: dst, msg: msg} = message) do
     full = src <> <<len(message)>> <> dst <> msg
     full <> <<xor(full)>>
@@ -48,17 +47,20 @@ defmodule ExIbus.Message do
 
   @doc """
   Check if given raw message is valid Ibus message
-  
+
   Function is really usefull for scanning Ibus can from car.
   """
   @spec valid?(binary) :: boolean
-  def valid?(<< src :: size(8), lng :: size(8), dst :: size(8), msg :: binary >> = rawMsg) when is_binary(rawMsg) do
+  def valid?(<<src::size(8), lng::size(8), dst::size(8), msg::binary>> = rawMsg)
+      when is_binary(rawMsg) do
     case byte_size(<<dst>> <> msg) == lng do
-      false -> false
+      false ->
+        false
+
       true ->
         # msg will contain xor byte aswell and we have to remove it
         msg = :binary.part(msg, 0, byte_size(msg) - 1)
-        rawMsg ==  %__MODULE__{src: <<src>>, dst: <<dst>>, msg: msg} |> raw()
+        rawMsg == %__MODULE__{src: <<src>>, dst: <<dst>>, msg: msg} |> raw()
     end
   end
 
@@ -67,27 +69,29 @@ defmodule ExIbus.Message do
   @doc """
   Will try to create a new `ExIbus.Message.t` from given raw binary message
   """
-  @spec parse(binary) :: {:ok, ExIbus.Message.t} | {:error, term}
-  def parse(<< src :: size(8), _ :: size(8), dst :: size(8), msg :: binary >> = raw) do
+  @spec parse(binary) :: {:ok, ExIbus.Message.t()} | {:error, term}
+  def parse(<<src::size(8), _::size(8), dst::size(8), msg::binary>> = raw) do
     case valid?(raw) do
-      false -> {:error, "Wrong message passed for parsing"}
+      false ->
+        {:error, "Wrong message passed for parsing"}
+
       true ->
-           # msg will contain xor byte aswell and we have to remove it
-           msg = :binary.part(msg, 0, byte_size(msg) - 1)
-           {:ok, %__MODULE__{src: <<src>>, dst: <<dst>>, msg: msg}}
+        # msg will contain xor byte aswell and we have to remove it
+        msg = :binary.part(msg, 0, byte_size(msg) - 1)
+        {:ok, %__MODULE__{src: <<src>>, dst: <<dst>>, msg: msg}}
     end
   end
 
   def parse(_), do: {:error, "Wrong message passed"}
-
 
   # Calculate xor (checksum) for message
   # It's a last byte for ibus message 
   defp xor(msg) when is_binary(msg) do
     msg
     |> :binary.bin_to_list()
-    |> Enum.reduce(0, fn(x, acc) -> Bitwise.bxor(acc, x) end)
+    |> Enum.reduce(0, fn x, acc -> Bitwise.bxor(acc, x) end)
   end
+
   defp xor(_), do: <<0x00>>
 
   # Calculate length of Ibus message
@@ -95,6 +99,6 @@ defmodule ExIbus.Message do
   defp len(%__MODULE__{dst: dst, msg: msg}) do
     byte_size(dst <> msg) + 1
   end
-  defp len(_), do: 0
 
+  defp len(_), do: 0
 end

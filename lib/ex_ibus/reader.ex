@@ -1,5 +1,4 @@
 defmodule ExIbus.Reader do
-
   use GenServer
   alias ExIbus.Message
 
@@ -9,9 +8,14 @@ defmodule ExIbus.Reader do
   """
 
   defmodule State do
-
     @moduledoc false
-    @opaque t :: %__MODULE__{buffer: binary, name: binary, messages: [ExIbus.Message.t], listener: pid, active: boolean}
+    @opaque t :: %__MODULE__{
+              buffer: binary,
+              name: binary,
+              messages: [ExIbus.Message.t()],
+              listener: pid,
+              active: boolean
+            }
     @doc false
 
     # buffer: list of bytes to process
@@ -19,15 +23,14 @@ defmodule ExIbus.Reader do
     # listener: pid send messages to
     # active: active or passive mode
     # name: reader name
-    defstruct buffer: "", 
-      messages: [],
-      name: "",
-      listener: nil,
-      active: false
-
+    defstruct buffer: "",
+              messages: [],
+              name: "",
+              listener: nil,
+              active: false
   end
 
-  @type reader_options :: 
+  @type reader_options ::
           {:active, boolean}
           | {:listener, pid}
           | {:name, binary}
@@ -45,13 +48,13 @@ defmodule ExIbus.Reader do
   []
   ```
   """
-  @spec read(GenServer.server) :: [ExIbus.Message.t] | {:error, term}
+  @spec read(GenServer.server()) :: [ExIbus.Message.t()] | {:error, term}
   def read(pid), do: GenServer.call(pid, :get_messages)
 
   @doc """
   Send data to Module for processing
   """
-  @spec write(GenServer.server, binary) :: :ok | {:error, term}
+  @spec write(GenServer.server(), binary) :: :ok | {:error, term}
   def write(pid, msg) do
     send(pid, {:message, msg})
   end
@@ -84,14 +87,13 @@ defmodule ExIbus.Reader do
   `read/1` manually when ready for more data.
 
   """
-  @spec configure(GenServer.server, reader_options) :: :ok | {:error, term}
+  @spec configure(GenServer.server(), reader_options) :: :ok | {:error, term}
   def configure(pid, opts) do
     GenServer.call(pid, {:configure, opts})
   end
 
-
   @doc false
-  @spec init(State.t) :: {:ok, State.t}
+  @spec init(State.t()) :: {:ok, State.t()}
   def init(state), do: {:ok, state}
 
   @doc """
@@ -108,10 +110,12 @@ defmodule ExIbus.Reader do
   [%ExIbus.Message{src: <<0x68>>, dst: <<0x18>>, msg: <<0x0A, 0x00>>}]
   ```
   """
-  @spec handle_info({:message, binary}, State.t) :: {:noreply, State.t} | {:error, term}
+  @spec handle_info({:message, binary}, State.t()) :: {:noreply, State.t()} | {:error, term}
   def handle_info({:message, msg}, state) do
-    new_state = process_new_message(msg, state) 
-                |> send_messages()
+    new_state =
+      process_new_message(msg, state)
+      |> send_messages()
+
     {:noreply, new_state}
   end
 
@@ -129,40 +133,48 @@ defmodule ExIbus.Reader do
     listener = Keyword.get(opts, :listener, nil)
     name = Keyword.get(opts, :name, "")
 
-    case configure_reader(state, [active: active, listener: listener, name: name]) do
+    case configure_reader(state, active: active, listener: listener, name: name) do
       {:ok, new_state} -> {:reply, :ok, new_state}
       {:error, msg, new_state} -> {:reply, {:error, msg}, new_state}
       _ -> {:reply, {:error, "Something went wrong"}, state}
     end
   end
 
-
   # Set new configuration for reader
-  defp configure_reader(state, [active: true, listener: nil, name: name]) do 
+  defp configure_reader(state, active: true, listener: nil, name: name) do
     {:error, "Could not enable active mode without listener", %State{state | name: name}}
   end
-  defp configure_reader(state, [active: active, listener: listener, name: name]) do
+
+  defp configure_reader(state, active: active, listener: listener, name: name) do
     {:ok, %State{state | active: active, listener: listener, name: name}}
   end
 
   # Process buffer that was received by module
   # And try to fetch all messages from it
   defp process_new_message("", state), do: state
+
   defp process_new_message(msg, %State{buffer: buffer} = state) when is_binary(msg) do
     new_buff = buffer <> msg
+
     case byte_size(new_buff) do
       x when x >= 5 -> fetch_messages(%State{state | buffer: new_buff})
       _ -> %State{state | buffer: new_buff}
     end
   end
+
   defp process_new_message(_, state), do: state
 
   # Will try to fetch a valid message from buffer in state
   defp fetch_messages(%State{messages: messages, buffer: buffer} = state) do
     case process_buffer(buffer) do
-      {:error, _} -> %State{state | buffer: ""}
-      {:ok, _rest, []} -> state
-      {:ok, rest, new_messages} -> %State{state | messages: messages ++ new_messages, buffer: rest}
+      {:error, _} ->
+        %State{state | buffer: ""}
+
+      {:ok, _rest, []} ->
+        state
+
+      {:ok, rest, new_messages} ->
+        %State{state | messages: messages ++ new_messages, buffer: rest}
     end
   end
 
@@ -170,19 +182,22 @@ defmodule ExIbus.Reader do
   # from buffer
   defp process_buffer(buffer, messages \\ [])
   defp process_buffer("", messages), do: {:ok, "", messages}
+
   defp process_buffer(buffer, messages) when is_binary(buffer) do
     with true <- byte_size(buffer) >= 5,
          {:ok, msg, rest} <- pick_message(buffer) do
-
-          process_buffer(rest, messages ++ [msg])
+      process_buffer(rest, messages ++ [msg])
     else
-      false -> {:ok, buffer, messages}
-      {:error, _} -> 
+      false ->
+        {:ok, buffer, messages}
+
+      {:error, _} ->
         buffer
         |> :binary.part(1, byte_size(buffer) - 1)
         |> process_buffer(messages)
     end
   end
+
   defp process_buffer(_, _), do: {:error, "Wrong input buffer passed"}
 
   # Will try to get message in beginning of given buffer
@@ -190,28 +205,28 @@ defmodule ExIbus.Reader do
   # otherwise it will return `{:error, term}`
   #
   # Note that rest of buffer might be an empty binary
-  defp pick_message(<< src :: size(8), lng :: size(8), tail :: binary >>) do
-    with true          <- byte_size(tail) >= lng,
-         msg           <- :binary.part(tail, 0, lng),
-         full          <- <<src>> <> <<lng>> <> msg,
-         true          <- Message.valid?(full),
+  defp pick_message(<<src::size(8), lng::size(8), tail::binary>>) do
+    with true <- byte_size(tail) >= lng,
+         msg <- :binary.part(tail, 0, lng),
+         full <- <<src>> <> <<lng>> <> msg,
+         true <- Message.valid?(full),
          {:ok, result} <- Message.parse(full),
-         rest          <- :binary.part(tail, lng, byte_size(tail) - lng) do
-           {:ok, result, rest}
+         rest <- :binary.part(tail, lng, byte_size(tail) - lng) do
+      {:ok, result, rest}
     else
       _ -> {:error, "No valid message in message exist"}
     end
   end
-  
+
   # Send list of messages one by one to controlling process
   defp send_messages(%State{active: false} = state), do: state
   defp send_messages(%State{messages: []} = state), do: state
   defp send_messages(%State{listener: nil} = state), do: state
+
   defp send_messages(%State{messages: messages, listener: pid, active: true, name: name} = state) do
     messages
-    |> Enum.each(&(send(pid, {:ex_ibus, name, &1})))
+    |> Enum.each(&send(pid, {:ex_ibus, name, &1}))
 
     %State{state | messages: []}
   end
-
 end
