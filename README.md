@@ -1,11 +1,13 @@
 # ExIbus
+[![Hex pm](http://img.shields.io/hexpm/v/ex_ibus.svg?style=flat)](https://hex.pm/packages/ex_ibus) [![hex.pm downloads](https://img.shields.io/hexpm/dt/ex_ibus.svg?style=flat)](https://hex.pm/packages/ex_ibus)
 
-**TODO: Add description**
+Ibus protocol Message/Reader for working with cars
+
+[Documentation](https://hexdocs.pm/ex_ibus/api-reference.html) available on hex.pm
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `ex_ibus` to your list of dependencies in `mix.exs`:
+First add `ex_ibus` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
@@ -15,7 +17,18 @@ def deps do
 end
 ```
 
+Then run `$ mix deps.get`.
+
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at [https://hexdocs.pm/ex_ibus](https://hexdocs.pm/ex_ibus).
 
+
+## License
+
+```
+Copyright © 2017 Konstantin Zolotarev
+
+This work is free. You can redistribute it and/or modify it under the
+terms of the MIT License. See the LICENSE file for more details.
+```
