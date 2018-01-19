@@ -29,6 +29,18 @@ defmodule ExIbus.Message do
   end
 
   @doc """
+  It's helper function for creating message structs fast
+
+  ## Example:
+  ```elixir
+  iex(1)> ExIbus.Message.create(<<0x18>>, <<0xFF>>, <<0x02, 0x01>>)
+  %ExIbus.Message{src: <<0x18>>, dst: <<0xFF>>, msg: <<0x02, 0x01>>}
+  ```
+  """
+  @spec create(binary, binary, binary) :: ExIbus.Message.t()
+  def create(src, dst, msg), do: %__MODULE__{src: src, dst: dst, msg: msg}
+
+  @doc """
   Create a raw binary message with length byte and last XOR byte as well.
 
   ## Example: 
