@@ -65,7 +65,7 @@ defmodule ExIbus.Message do
   @spec valid?(binary) :: boolean
   def valid?(<<src::size(8), lng::size(8), dst::size(8), msg::binary>> = rawMsg)
       when is_binary(rawMsg) do
-    case byte_size(<<dst>> <> msg) == lng do
+    case byte_size(<<dst>> <> msg) == lng && byte_size(msg) > 0 do
       false ->
         false
 

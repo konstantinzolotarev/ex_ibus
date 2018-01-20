@@ -8,7 +8,7 @@ defmodule ExIbus.Mixfile do
   def project do
     [
       app: :ex_ibus,
-      version: "0.1.1",
+      version: "0.1.2",
       elixir: "~> 1.3",
       name: "Ibus protocol helper",
       description: @description,
