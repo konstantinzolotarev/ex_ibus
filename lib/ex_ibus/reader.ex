@@ -35,8 +35,15 @@ defmodule ExIbus.Reader do
           | {:listener, pid}
           | {:name, binary}
 
-  @spec start_link([term]) :: {:ok, pid} | {:error, term}
-  def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, %State{}, opts)
+  @doc """
+  Start new reader in application. 
+
+  Reader will receive/parse messages from system
+  """
+  @spec start_link(ExIbus.Reader.reader_options(), [term]) :: {:ok, pid} | {:error, term}
+  def start_link(config \\ [], opts \\ []) do 
+    GenServer.start_link(__MODULE__, configure_reader(%State{}, config), opts)
+  end
 
   @doc """
   Read list of available messages in reader.
