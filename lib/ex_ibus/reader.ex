@@ -42,7 +42,7 @@ defmodule ExIbus.Reader do
   """
   @spec start_link(ExIbus.Reader.reader_options(), [term]) :: {:ok, pid} | {:error, term}
   def start_link(config \\ [], opts \\ []) do
-    state = configure_reader(%State{}, config)
+    {:ok, state} = configure_reader(%State{}, config)
     GenServer.start_link(__MODULE__, state, opts)
   end
 
