@@ -41,8 +41,9 @@ defmodule ExIbus.Reader do
   Reader will receive/parse messages from system
   """
   @spec start_link(ExIbus.Reader.reader_options(), [term]) :: {:ok, pid} | {:error, term}
-  def start_link(config \\ [], opts \\ []) do 
-    GenServer.start_link(__MODULE__, configure_reader(%State{}, config), opts)
+  def start_link(config \\ [], opts \\ []) do
+    state = configure_reader(%State{}, config)
+    GenServer.start_link(__MODULE__, state, opts)
   end
 
   @doc """
@@ -136,11 +137,7 @@ defmodule ExIbus.Reader do
 
   @doc false
   def handle_call({:configure, opts}, _from, state) do
-    active = Keyword.get(opts, :active, true)
-    listener = Keyword.get(opts, :listener, nil)
-    name = Keyword.get(opts, :name, "")
-
-    case configure_reader(state, active: active, listener: listener, name: name) do
+    case configure_reader(state, opts) do
       {:ok, new_state} -> {:reply, :ok, new_state}
       {:error, msg, new_state} -> {:reply, {:error, msg}, new_state}
       _ -> {:reply, {:error, "Something went wrong"}, state}
@@ -154,6 +151,14 @@ defmodule ExIbus.Reader do
 
   defp configure_reader(state, active: active, listener: listener, name: name) do
     {:ok, %State{state | active: active, listener: listener, name: name}}
+  end
+
+  defp configure_reader(state, opts) do
+    active = Keyword.get(opts, :active, true)
+    listener = Keyword.get(opts, :listener, nil)
+    name = Keyword.get(opts, :name, "")
+
+    configure_reader(state, active: active, listener: listener, name: name)
   end
 
   # Process buffer that was received by module
